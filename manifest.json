@@ -1,0 +1,19 @@
+{
+  "version": "1.0.0",
+  "release_date": "2024-01-15",
+  "changelog": [
+    "Базовая функциональность VPN клиента",
+    "Поддержка OpenVPN серверов", 
+    "График скорости подключения",
+    "Система обновлений",
+    "Интерфейс ZAPRET для обхода блокировок"
+  ],
+  "min_required_version": "1.0.0",
+  "files": [
+    "VPN.exe",
+    "NN VPN.exe",
+    "OpenVPN/",
+    "ZAPRET/",
+    "version.txt"
+  ]
+}

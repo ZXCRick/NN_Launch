@@ -1,2 +1,14 @@
-# NN_Launch
-VPN + ZAPRET created to help ordinary users by ISWYRE
+# NN VPN Client
+
+Простой и удобный VPN клиент с поддержкой OpenVPN.
+
+## Возможности
+- Подключение к бесплатным OpenVPN серверам
+- Мониторинг скорости в реальном времени
+- Автоматические обновления
+- ZAPRET для обхода блокировок
+
+## Установка
+1. Скачайте последнюю версию из [Releases](https://github.com/ZXCRick/NN_Launch/releases)
+2. Распакуйте архив
+3. Запустите `VPN.exe`
