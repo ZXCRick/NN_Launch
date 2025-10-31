@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-1.1.0-purple.svg)
+![Version](https://img.shields.io/badge/version-1.0.0-purple.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-blue.svg)
 ![Launcher](https://img.shields.io/badge/Launcher-VPN_&_ZAPRET-green.svg)
 
@@ -150,3 +150,4 @@
 *Выбирайте режим под задачу и наслаждайтесь свободным интернетом!*
 
 </div>
+
