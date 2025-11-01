@@ -2,5 +2,21 @@
   "Servers": [],
   "LastConnectedServer": "191.222.206.205",
   "AutoConnect": false,
-  "ImportedConfigs": []
+  "ImportedConfigs": [],
+  "AutoStart": false,
+  "MinimizeToTray": false,
+  "ShowConnectionNotifications": false,
+  "PlaySoundNotifications": true,
+  "AutoCheckUpdates": true,
+  "AutoInstallUpdates": false,
+  "LastUpdateCheck": null,
+  "SkippedVersion": null,
+  "StartMinimized": false,
+  "KillSwitch": false,
+  "Protocol": "UDP",
+  "ConnectionTimeout": 30,
+  "LastBackupDate": null,
+  "FirstRun": "2025-11-01T02:02:30.8291169+05:00",
+  "TotalBytesTransferred": 0,
+  "TotalConnections": 0
 }
