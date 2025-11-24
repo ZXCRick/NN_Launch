@@ -44,3 +44,16 @@ ffzap.com
 betterttv.net
 7tv.app
 7tv.io
+media.soundcloud.com
+sndcdn.com
+soundcloud.app.goo.gl
+on.soundcloud.com
+secure.soundcloud.com
+api.soundcloud.com
+feeds.soundcloud.com
+soundcloud.com
+openai.com
+chatgpt.com
+instagram.com
+discord-tracker.com
+sherlock-report.at

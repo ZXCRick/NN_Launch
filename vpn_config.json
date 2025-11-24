@@ -1,10 +1,9 @@
 {
   "Servers": [],
   "LastConnectedServer": "191.222.206.205",
-  "AutoConnect": false,
+  "AutoConnect": true,
   "ImportedConfigs": [],
   "AutoStart": false,
-  "MinimizeToTray": false,
   "ShowConnectionNotifications": false,
   "PlaySoundNotifications": true,
   "AutoCheckUpdates": true,
@@ -18,5 +17,9 @@
   "LastBackupDate": null,
   "FirstRun": "2025-11-01T02:02:30.8291169+05:00",
   "TotalBytesTransferred": 0,
-  "TotalConnections": 0
+  "TotalConnections": 0,
+  "LastZapretStrategy": "general (ALT7)",
+  "ZapretWasRunning": true,
+  "ZapretAutoStopOnExit": true,
+  "ZapretAutoStart": false
 }
