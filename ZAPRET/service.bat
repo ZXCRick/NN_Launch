@@ -1,5 +1,5 @@
 @echo off
-set "LOCAL_VERSION=1.9.0b"
+set "LOCAL_VERSION=1.9.2"
 
 :: External commands
 if "%~1"=="status_zapret" (
@@ -9,10 +9,12 @@ if "%~1"=="status_zapret" (
 )
 
 if "%~1"=="check_updates" (
-    if not "%~2"=="soft" (
-        start /b service check_updates soft
-    ) else (
-        call :service_check_updates soft
+    if exist "%~dp0utils\check_updates.enabled" (
+        if not "%~2"=="soft" (
+            start /b service check_updates soft
+        ) else (
+            call :service_check_updates soft
+        )
     )
     exit /b
 )
@@ -22,10 +24,32 @@ if "%~1"=="load_game_filter" (
     exit /b
 )
 
+if "%~1"=="update_hosts_auto" (
+    call :auto_update_hosts
+    exit /b
+)
+
+:: Авто-проверка hosts при запуске любого bypass-файла (кроме service.bat)
+if not "%~1"=="admin" if not "%~1"=="update_hosts" (
+    :: Проверяем, что это НЕ service.bat
+    echo %~nx0 | findstr /i "^service\.bat$" >nul
+    if errorlevel 1 (
+        :: Это bypass-файл, запускаем авто-проверку hosts в фоне
+        if exist "%~dp0utils\auto_update_hosts.enabled" (
+            start /b "" cmd /c "%~f0" update_hosts_auto
+        )
+    )
+)
 
 if "%1"=="admin" (
+    call :check_command chcp
+    call :check_command find
+    call :check_command findstr
+    call :check_command netsh
     echo Started with admin rights
 ) else (
+    call :check_extracted
+    call :check_command powershell
     echo Requesting admin rights...
     powershell -Command "Start-Process 'cmd.exe' -ArgumentList '/c \"\"%~f0\" admin\"' -Verb RunAs"
     exit
@@ -38,6 +62,8 @@ setlocal EnableDelayedExpansion
 cls
 call :ipset_switch_status
 call :game_switch_status
+call :check_updates_switch_status
+call :auto_update_hosts_status
 
 set "menu_choice=null"
 echo =========  v!LOCAL_VERSION!  =========
@@ -46,20 +72,28 @@ echo 2. Remove Services
 echo 3. Check Status
 echo 4. Run Diagnostics
 echo 5. Check Updates
-echo 6. Switch Game Filter (%GameFilterStatus%)
-echo 7. Switch ipset (%IPsetStatus%)
-echo 8. Update ipset list
+echo 6. Switch Check Updates (%CheckUpdatesStatus%)
+echo 7. Switch Game Filter (%GameFilterStatus%)
+echo 8. Switch ipset (%IPsetStatus%)
+echo 9. Update ipset list
+echo 10. Update hosts file (for discord voice)
+echo 11. Switch Auto-Update Hosts (%AutoUpdateHostsStatus%)
+echo 12. Run Tests
 echo 0. Exit
-set /p menu_choice=Enter choice (0-8): 
+set /p menu_choice=Enter choice (0-12): 
 
 if "%menu_choice%"=="1" goto service_install
 if "%menu_choice%"=="2" goto service_remove
 if "%menu_choice%"=="3" goto service_status
 if "%menu_choice%"=="4" goto service_diagnostics
 if "%menu_choice%"=="5" goto service_check_updates
-if "%menu_choice%"=="6" goto game_switch
-if "%menu_choice%"=="7" goto ipset_switch
-if "%menu_choice%"=="8" goto ipset_update
+if "%menu_choice%"=="6" goto check_updates_switch
+if "%menu_choice%"=="7" goto game_switch
+if "%menu_choice%"=="8" goto ipset_switch
+if "%menu_choice%"=="9" goto ipset_update
+if "%menu_choice%"=="10" goto hosts_update
+if "%menu_choice%"=="11" goto auto_update_hosts_switch
+if "%menu_choice%"=="12" goto run_tests
 if "%menu_choice%"=="0" exit /b
 goto menu
 
@@ -82,13 +116,18 @@ if !errorlevel!==0 (
 
 call :test_service zapret
 call :test_service WinDivert
+
+set "BIN_PATH=%~dp0bin\"
+if not exist "%BIN_PATH%\*.sys" (
+    call :PrintRed "WinDivert64.sys file NOT found."
+)
 echo:
 
 tasklist /FI "IMAGENAME eq winws.exe" | find /I "winws.exe" > nul
 if !errorlevel!==0 (
-    call :PrintGreen "Bypass (winws.exe) is ACTIVE"
+    call :PrintGreen "Bypass (winws.exe) is RUNNING."
 ) else (
-    call :PrintRed "Bypass (winws.exe) NOT FOUND"
+    call :PrintRed "Bypass (winws.exe) is NOT running."
 )
 
 pause
@@ -178,7 +217,11 @@ for %%f in (*.bat) do (
 :: Choosing file
 set "choice="
 set /p "choice=Input file index (number): "
-if "!choice!"=="" goto :eof
+if "!choice!"=="" (
+    echo The choice is empty, exiting...
+    pause
+    goto menu
+)
 
 set "selectedFile=!file%choice%!"
 if not defined selectedFile (
@@ -300,7 +343,7 @@ set "GITHUB_RELEASE_URL=https://github.com/Flowseal/zapret-discord-youtube/relea
 set "GITHUB_DOWNLOAD_URL=https://github.com/Flowseal/zapret-discord-youtube/releases/latest/download/zapret-discord-youtube-"
 
 :: Get the latest version from GitHub
-for /f "delims=" %%A in ('powershell -command "(Invoke-WebRequest -Uri \"%GITHUB_VERSION_URL%\" -Headers @{\"Cache-Control\"=\"no-cache\"} -TimeoutSec 5).Content.Trim()" 2^>nul') do set "GITHUB_VERSION=%%A"
+for /f "delims=" %%A in ('powershell -command "(Invoke-WebRequest -Uri \"%GITHUB_VERSION_URL%\" -Headers @{\"Cache-Control\"=\"no-cache\"} -UseBasicParsing -TimeoutSec 5).Content.Trim()" 2^>nul') do set "GITHUB_VERSION=%%A"
 
 :: Error handling
 if not defined GITHUB_VERSION (
@@ -372,6 +415,16 @@ if !proxyEnabled!==1 (
     call :PrintGreen "Proxy check passed"
 )
 echo:
+
+:: Check netsh
+where netsh >nul 2>nul
+if !errorlevel! neq 0  (
+    call :PrintRed "[X] netsh command not found, check your PATH variable"
+	echo PATH = "%PATH%"
+	echo:
+	pause
+	goto menu
+)
 
 :: TCP timestamps check
 netsh interface tcp show global | findstr /i "timestamps" | findstr /i "enabled" > nul
@@ -448,10 +501,25 @@ if !errorlevel!==0 (
 )
 echo:
 
+:: WinDivert64.sys file
+set "BIN_PATH=%~dp0bin\"
+if not exist "%BIN_PATH%\*.sys" (
+    call :PrintRed "WinDivert64.sys file NOT found."
+)
+echo:
+
 :: VPN
+set "VPN_SERVICES="
 sc query | findstr /I "VPN" > nul
 if !errorlevel!==0 (
-    call :PrintYellow "[?] Some VPN services found. Some VPNs can conflict with zapret"
+    for /f "tokens=2 delims=:" %%A in ('sc query ^| findstr /I "VPN"') do (
+        if not defined VPN_SERVICES (
+            set "VPN_SERVICES=!VPN_SERVICES!%%A"
+        ) else (
+            set "VPN_SERVICES=!VPN_SERVICES!,%%A"
+        )
+    )
+    call :PrintYellow "[?] VPN services found:!VPN_SERVICES!. Some VPNs can conflict with zapret"
     call :PrintYellow "Make sure that all VPNs are disabled"
 ) else (
     call :PrintGreen "VPN check passed"
@@ -618,7 +686,7 @@ goto menu
 :game_switch_status
 chcp 437 > nul
 
-set "gameFlagFile=%~dp0bin\game_filter.enabled"
+set "gameFlagFile=%~dp0utils\game_filter.enabled"
 
 if exist "%gameFlagFile%" (
     set "GameFilterStatus=enabled"
@@ -642,6 +710,36 @@ if not exist "%gameFlagFile%" (
     echo Disabling game filter...
     del /f /q "%gameFlagFile%"
     call :PrintYellow "Restart the zapret to apply the changes"
+)
+
+pause
+goto menu
+
+
+:: CHECK UPDATES SWITCH =================
+:check_updates_switch_status
+chcp 437 > nul
+
+set "checkUpdatesFlag=%~dp0utils\check_updates.enabled"
+
+if exist "%checkUpdatesFlag%" (
+    set "CheckUpdatesStatus=enabled"
+) else (
+    set "CheckUpdatesStatus=disabled"
+)
+exit /b
+
+
+:check_updates_switch
+chcp 437 > nul
+cls
+
+if not exist "%checkUpdatesFlag%" (
+    echo Enabling check updates...
+    echo ENABLED > "%checkUpdatesFlag%"
+) else (
+    echo Disabling check updates...
+    del /f /q "%checkUpdatesFlag%"
 )
 
 pause
@@ -741,6 +839,287 @@ echo Finished
 pause
 goto menu
 
+
+:: HOSTS UPDATE =======================
+:hosts_update
+chcp 437 > nul
+cls
+
+echo ============================================
+echo    AUTOMATIC HOSTS FILE UPDATE
+echo ============================================
+echo.
+
+:: Проверяем права администратора
+net session >nul 2>&1
+if %errorLevel% neq 0 (
+    call :PrintRed "ERROR: Administrator privileges required!"
+    echo.
+    call :PrintYellow "Attempting to restart with admin rights..."
+    timeout /t 2 /nobreak >nul
+    
+    powershell -Command ^
+        "Start-Process '%~f0' -ArgumentList 'update_hosts_admin' -Verb RunAs -WindowStyle Hidden"
+    goto menu
+)
+
+:: Основные переменные
+set "hostsFile=%SystemRoot%\System32\drivers\etc\hosts"
+set "hostsUrl=https://raw.githubusercontent.com/Flowseal/zapret-discord-youtube/refs/heads/main/.service/hosts"
+set "backupFile=%hostsFile%.backup.%date:~-4,4%%date:~-10,2%%date:~-7,2%_%time:~0,2%%time:~3,2%"
+set "tempFile=%TEMP%\zapret_hosts_%random%.txt"
+
+echo Downloading latest hosts file...
+if exist "%SystemRoot%\System32\curl.exe" (
+    curl -L -s -o "%tempFile%" "%hostsUrl%"
+) else (
+    powershell -Command ^
+        "$url = '%hostsUrl%';" ^
+        "$out = '%tempFile%';" ^
+        "try {" ^
+        "    $res = Invoke-WebRequest -Uri $url -TimeoutSec 10 -UseBasicParsing;" ^
+        "    if ($res.StatusCode -eq 200) { $res.Content | Out-File -FilePath $out -Encoding UTF8 }" ^
+        "} catch { exit 1 }"
+)
+
+if not exist "%tempFile%" (
+    call :PrintRed "Failed to download hosts file from repository"
+    pause
+    goto menu
+)
+
+echo Creating backup...
+copy "%hostsFile%" "%backupFile%" >nul 2>&1
+if !errorlevel!==0 (
+    call :PrintGreen "Backup created: %backupFile%"
+)
+
+echo Updating hosts file...
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+    "$hostsFile = '%hostsFile%';" ^
+    "$newContent = Get-Content '%tempFile%' -Raw;" ^
+    "$currentContent = Get-Content $hostsFile -Raw -ErrorAction SilentlyContinue;" ^
+    "$markerStart = '# Zapret Discord fix start';" ^
+    "$markerEnd = '# Zapret Discord fix end';" ^
+    "" ^
+    "# Удаляем старую секцию если существует" ^
+    "if ($currentContent -match '(?s)$markerStart.*?$markerEnd') {" ^
+    "    $currentContent = $currentContent -replace '(?s)$markerStart.*?$markerEnd', '';" ^
+    "    Write-Host 'Removed old Zapret section' -ForegroundColor Yellow;" ^
+    "}" ^
+    "" ^
+    "# Добавляем новую секцию в конец файла" ^
+    "$newContentFull = $currentContent.Trim() + \"`r`n`r`n\" + $newContent;" ^
+    "Set-Content -Path $hostsFile -Value $newContentFull -Encoding UTF8;" ^
+    "" ^
+    "Write-Host 'Hosts file updated successfully!' -ForegroundColor Green;" ^
+    "" ^
+    "# Подсчет добавленных записей" ^
+    "$entryCount = ($newContent -split \"`r`n\" | Where-Object { $_ -match '^\d' }).Count;" ^
+    "Write-Host (\"Added $entryCount DNS entries for Discord voice servers\") -ForegroundColor Green;"
+
+echo.
+call :PrintGreen "DNS cache flushing..."
+ipconfig /flushdns >nul 2>&1
+if !errorlevel!==0 (
+    call :PrintGreen "DNS cache flushed successfully"
+)
+
+:: Очистка временных файлов
+if exist "%tempFile%" del /f /q "%tempFile%"
+
+echo.
+call :PrintYellow "Note: You may need to restart Discord for changes to take effect."
+echo.
+
+pause
+goto menu
+
+if "%~1"=="update_hosts_admin" (
+    call :hosts_update
+    exit /b
+)
+
+
+:: AUTO UPDATE HOSTS SWITCH ===========
+:auto_update_hosts_status
+chcp 437 > nul
+
+set "autoUpdateFlag=%~dp0utils\auto_update_hosts.enabled"
+
+if exist "%autoUpdateFlag%" (
+    set "AutoUpdateHostsStatus=enabled"
+) else (
+    set "AutoUpdateHostsStatus=disabled"
+)
+exit /b
+
+
+:auto_update_hosts_switch
+chcp 437 > nul
+cls
+
+set "autoUpdateFlag=%~dp0utils\auto_update_hosts.enabled"
+
+if not exist "%autoUpdateFlag%" (
+    echo Enabling automatic hosts updates...
+    echo ENABLED > "%autoUpdateFlag%"
+    call :PrintGreen "Automatic hosts updates enabled!"
+    echo.
+    call :PrintYellow "Hosts will be checked automatically when you run any bypass .bat file"
+) else (
+    echo Disabling automatic hosts updates...
+    del /f /q "%autoUpdateFlag%"
+    call :PrintGreen "Automatic hosts updates disabled!"
+)
+
+pause
+goto menu
+
+
+:: AUTO UPDATE HOSTS (BACKGROUND) =====
+:auto_update_hosts
+setlocal EnableDelayedExpansion
+
+:: Проверяем, включено ли авто-обновление
+set "autoUpdateFlag=%~dp0utils\auto_update_hosts.enabled"
+if not exist "!autoUpdateFlag!" exit /b
+
+:: Проверяем, когда последний раз обновлялся hosts
+set "lastCheckFile=%~dp0utils\hosts_last_check.txt"
+
+:: Проверяем, не проверяли ли мы сегодня
+if exist "!lastCheckFile!" (
+    for /f "usebackq delims=" %%a in ("!lastCheckFile!") do (
+        set "lastDate=%%a"
+    )
+    if "!lastDate!"=="%date%" (
+        exit /b
+    )
+)
+
+:: Сохраняем дату проверки
+echo %date% > "!lastCheckFile!"
+
+:: Основные переменные
+set "hostsFile=%SystemRoot%\System32\drivers\etc\hosts"
+set "hostsUrl=https://raw.githubusercontent.com/Flowseal/zapret-discord-youtube/refs/heads/main/.service/hosts"
+set "tempFile=%TEMP%\zapret_hosts_auto_%random%.txt"
+
+:: Скачиваем актуальный hosts файл
+echo [Auto-update] Checking for hosts updates...
+
+if exist "%SystemRoot%\System32\curl.exe" (
+    curl -L -s -o "!tempFile!" "!hostsUrl!" >nul 2>&1
+) else (
+    powershell -Command ^
+        "$url = '!hostsUrl!';" ^
+        "$out = '!tempFile!';" ^
+        "try {" ^
+        "    $res = Invoke-WebRequest -Uri $url -TimeoutSec 5 -UseBasicParsing;" ^
+        "    if ($res.StatusCode -eq 200) { $res.Content | Out-File -FilePath $out -Encoding UTF8 }" ^
+        "} catch { exit 1 }" >nul 2>&1
+)
+
+if not exist "!tempFile!" (
+    echo [Auto-update] Failed to download hosts file
+    goto :cleanup_auto
+)
+
+:: Проверяем, нужно ли обновлять
+set "needsUpdate=0"
+set "markerStart=# Zapret Discord fix start"
+
+:: Проверяем, есть ли маркер в текущем hosts файле
+findstr /C:"!markerStart!" "!hostsFile!" >nul 2>&1
+if errorlevel 1 (
+    set "needsUpdate=1"
+    echo [Auto-update] Zapret section not found in hosts file
+) else (
+    :: Проверяем первую и последнюю строку из скачанного файла
+    set "firstLine="
+    set "lastLine="
+    for /f "usebackq tokens=* delims=" %%a in ("!tempFile!") do (
+        if not defined firstLine set "firstLine=%%a"
+        set "lastLine=%%a"
+    )
+    
+    :: Проверяем первую строку секции
+    findstr /B /C:"!firstLine!" "!hostsFile!" >nul 2>&1
+    if errorlevel 1 set "needsUpdate=1"
+)
+
+if "!needsUpdate!"=="0" (
+    echo [Auto-update] Hosts file is up to date
+    goto :cleanup_auto
+)
+
+:: Пытаемся обновить автоматически
+echo [Auto-update] Attempting to update hosts file...
+
+:: Используем PowerShell для обновления
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+    "try {" ^
+    "    # Проверяем права администратора" ^
+    "    $identity = [Security.Principal.WindowsIdentity]::GetCurrent();" ^
+    "    $principal = New-Object Security.Principal.WindowsPrincipal($identity);" ^
+    "    if (!$principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {" ^
+    "        Write-Host '[Auto-update] Admin rights required' -ForegroundColor Yellow;" ^
+    "        exit 0;" ^
+    "    }" ^
+    "    " ^
+    "    $hostsFile = '$env:SystemRoot\System32\drivers\etc\hosts';" ^
+    "    $newContent = Get-Content '!tempFile!' -Raw;" ^
+    "    $currentContent = Get-Content $hostsFile -Raw -ErrorAction SilentlyContinue;" ^
+    "    $markerStart = '# Zapret Discord fix start';" ^
+    "    $markerEnd = '# Zapret Discord fix end';" ^
+    "    " ^
+    "    # Удаляем старую секцию если существует" ^
+    "    if ($currentContent -match '(?s)$markerStart.*?$markerEnd') {" ^
+    "        $currentContent = $currentContent -replace '(?s)$markerStart.*?$markerEnd', '';" ^
+    "    }" ^
+    "    " ^
+    "    # Добавляем новую секцию" ^
+    "    $newContentFull = $currentContent.Trim() + \"`r`n`r`n\" + $newContent;" ^
+    "    Set-Content -Path $hostsFile -Value $newContentFull -Encoding UTF8;" ^
+    "    " ^
+    "    # Очистка DNS кэша" ^
+    "    ipconfig /flushdns | Out-Null;" ^
+    "    " ^
+    "    $entryCount = ($newContent -split \"`r`n\" | Where-Object { `$_ -match '^\d' }).Count;" ^
+    "    Write-Host (\"[Auto-update] Updated hosts file with $entryCount entries\") -ForegroundColor Green;" ^
+    "} catch {" ^
+    "    Write-Host ('[Auto-update] Error: ' + `$_.Exception.Message) -ForegroundColor Red;" ^
+    "}" >nul 2>&1
+
+:cleanup_auto
+if exist "!tempFile!" del /f /q "!tempFile!" >nul 2>&1
+endlocal
+exit /b
+
+
+:: RUN TESTS =============================
+:run_tests
+chcp 65001 >nul
+cls
+
+:: Require PowerShell 3.0+
+powershell -NoProfile -Command "if ($PSVersionTable -and $PSVersionTable.PSVersion -and $PSVersionTable.PSVersion.Major -ge 3) { exit 0 } else { exit 1 }" >nul 2>&1
+if %errorLevel% neq 0 (
+    echo PowerShell 3.0 or newer is required.
+    echo Please upgrade PowerShell and rerun this script.
+    echo.
+    pause
+    goto menu
+)
+
+echo Starting configuration tests in PowerShell window...
+echo.
+start "" powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0utils\test zapret.ps1"
+pause
+goto menu
+
+
 :: Utility functions
 
 :PrintGreen
@@ -754,3 +1133,25 @@ exit /b
 :PrintYellow
 powershell -Command "Write-Host \"%~1\" -ForegroundColor Yellow"
 exit /b
+
+:check_command
+where %1 >nul 2>&1
+if %errorLevel% neq 0 (
+    echo [ERROR] %1 not found in PATH
+    echo Fix your PATH variable with instructions here https://github.com/Flowseal/zapret-discord-youtube/issues/7490
+    pause
+    exit /b 1
+)
+exit /b 0
+
+:check_extracted
+set "extracted=1"
+
+if not exist "%~dp0bin\" set "extracted=0"
+
+if "%extracted%"=="0" (
+    echo Zapret must be extracted from archive first or bin folder not found for some reason
+    pause
+    exit
+)
+exit /b 0
