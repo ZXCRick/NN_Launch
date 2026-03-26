@@ -2,7 +2,7 @@
 
 # 🚀 NN Launcher - Лаунчер для ZAPRET
 
-![Version](https://img.shields.io/badge/version-1.0.6-purple.svg)
+![Version](https://img.shields.io/badge/version-1.0.7-purple.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-blue.svg)
 ![Launcher](https://img.shields.io/badge/Launcher-ZAPRET-green.svg)
 
